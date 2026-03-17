@@ -1,0 +1,164 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: helixa
+      POSTGRES_USER: helixa
+      POSTGRES_PASSWORD: helixa_secret
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U helixa -d helixa" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6335:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+
+  neo4j:
+    image: neo4j:5.23.0
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-helixa_graph_secret}
+      NEO4J_dbms_memory_heap_max__size: 400M
+      NEO4J_dbms_memory_pagecache_size: 200M
+    ports:
+      - "127.0.0.1:7474:7474" # HTTP UI
+      - "127.0.0.1:7687:7687" # Bolt port
+    volumes:
+      - neo4j_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+    networks:
+      - default
+
+  api:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8005 --reload
+    ports:
+      - "8005:8005"
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      neo4j:
+        condition: service_started
+    environment:
+      - REDIS_URL=redis://redis:6379/1
+      - ALEM_API_KEY=${ALEM_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMMA_API_KEY=${GEMMA_API_KEY}
+      - QWEN_API_KEY=${QWEN_API_KEY}
+      - GPT_OSS_API_KEY=${GPT_OSS_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_PROVIDER=gpt-oss
+      - ENABLE_JUDGE=true
+      - HELIXA_DATABASE_URL=postgresql+asyncpg://helixa:helixa_secret@postgres:5432/helixa
+      - QDRANT_URL=http://qdrant:6333
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-helixa_graph_secret}
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8005/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend.Dockerfile
+    command: sh -c "while ! curl -sf http://qdrant:6333/readyz; do echo 'Waiting for Qdrant...'; sleep 1; done; echo 'Qdrant is ready!'; arq app.worker.WorkerSettings"
+    volumes:
+      - .:/app
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      qdrant:
+        condition: service_started
+      neo4j:
+        condition: service_started
+    environment:
+      - REDIS_URL=redis://redis:6379/1
+      - ALEM_API_KEY=${ALEM_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMMA_API_KEY=${GEMMA_API_KEY}
+      - QWEN_API_KEY=${QWEN_API_KEY}
+      - GPT_OSS_API_KEY=${GPT_OSS_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_PROVIDER=gpt-oss
+      - ENABLE_JUDGE=true
+      - HELIXA_DATABASE_URL=postgresql+asyncpg://helixa:helixa_secret@postgres:5432/helixa
+      - QDRANT_URL=http://qdrant:6333
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-helixa_graph_secret}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: frontend.Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8005/api/v1
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    deploy:
+      resources:
+        limits:
+          memory: 200M
+    depends_on:
+      - api
+
+volumes:
+  redis_data:
+  pg_data:
+  qdrant_data:
+  neo4j_data:
