@@ -41,6 +41,40 @@ async def notify_webhook(url: str, job_id: str, status: str, result: dict = None
     except Exception as e:
         logger.error(f"Failed to notify webhook {url}: {e}")
 
+async def update_agent_stage(agent_id: str, stage: str, status: str, data: Any = None):
+    """Atomic JSON merge update for agent stage status and data."""
+    try:
+        async with AsyncSessionLocal() as session:
+            if status == "done" and data is not None:
+                # If stage is 'editor', it provides the full corrected identity
+                data_patch = json.dumps(data if stage == "editor" else {stage: data}, ensure_ascii=False)
+                await session.execute(
+                    text("""
+                        UPDATE agents
+                        SET 
+                            stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:status_patch AS jsonb) AS json),
+                            agent_data = CAST(COALESCE(CAST(agent_data AS jsonb), '{}'::jsonb) || CAST(:data_patch AS jsonb) AS json)
+                        WHERE id = :agent_id
+                    """),
+                    {
+                        "status_patch": json.dumps({stage: status}), 
+                        "data_patch": data_patch,
+                        "agent_id": agent_id
+                    }
+                )
+            else:
+                await session.execute(
+                    text("""
+                        UPDATE agents
+                        SET stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:patch AS jsonb) AS json)
+                        WHERE id = :agent_id
+                    """),
+                    {"patch": json.dumps({stage: status}), "agent_id": agent_id}
+                )
+            await session.commit()
+    except Exception as e:
+        logger.warning(f"Failed to update stage {stage} for agent {agent_id}: {e}")
+
 async def run_auto_ci(agent_id: str, max_refinements: int = 3) -> Optional[int]:
     """Runs the Automated CI Pipeline (Audit, Exam, Stress).
     If the result is below IDEAL_THRESHOLD (80), triggers the Refinement Loop.
@@ -49,70 +83,7 @@ async def run_auto_ci(agent_id: str, max_refinements: int = 3) -> Optional[int]:
     refinement_count = 0
     
     async def set_stage(stage: str, status: str, data: Any = None):
-        """Atomic JSON merge update for stage status and data."""
-        try:
-            async with AsyncSessionLocal() as session:
-                if status == "done" and data is not None:
-                    data_patch = json.dumps({stage: data}, ensure_ascii=False)
-                    await session.execute(
-                        text("""
-                            UPDATE agents
-                            SET 
-                                stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:status_patch AS jsonb) AS json),
-                                agent_data = CAST(COALESCE(CAST(agent_data AS jsonb), '{}'::jsonb) || CAST(:data_patch AS jsonb) AS json)
-                            WHERE id = :agent_id
-                        """),
-                        {
-                            "status_patch": json.dumps({stage: status}), 
-                            "data_patch": data_patch,
-                            "agent_id": agent_id
-                        }
-                    )
-                else:
-                    await session.execute(
-                        text("""
-                            UPDATE agents
-                            SET stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:patch AS jsonb) AS json)
-                            WHERE id = :agent_id
-                        """),
-                        {"patch": json.dumps({stage: status}), "agent_id": agent_id}
-                    )
-                await session.commit()
-        except Exception as e:
-            logger.warning(f"CI: Failed to update stage {stage} for agent {agent_id}: {e}")
-
-    async def set_stage(stage: str, status: str, data: Any = None):
-        """Atomic JSON merge update for stage status and data."""
-        try:
-            async with AsyncSessionLocal() as session:
-                if status == "done" and data is not None:
-                    data_patch = json.dumps({stage: data}, ensure_ascii=False)
-                    await session.execute(
-                        text("""
-                            UPDATE agents
-                            SET 
-                                stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:status_patch AS jsonb) AS json),
-                                agent_data = CAST(COALESCE(CAST(agent_data AS jsonb), '{}'::jsonb) || CAST(:data_patch AS jsonb) AS json)
-                            WHERE id = :agent_id
-                        """),
-                        {
-                            "status_patch": json.dumps({stage: status}), 
-                            "data_patch": data_patch,
-                            "agent_id": agent_id
-                        }
-                    )
-                else:
-                    await session.execute(
-                        text("""
-                            UPDATE agents
-                            SET stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:patch AS jsonb) AS json)
-                            WHERE id = :agent_id
-                        """),
-                        {"patch": json.dumps({stage: status}), "agent_id": agent_id}
-                    )
-                await session.commit()
-        except Exception as e:
-            logger.warning(f"CI: Failed to update stage {stage} for agent {agent_id}: {e}")
+        await update_agent_stage(agent_id, stage, status, data)
 
     await set_stage("quality_control", "running")
     while refinement_count <= max_refinements:
@@ -332,43 +303,7 @@ async def run_staged_soul_generation(ctx, job_id: str, agent_db_id: str, req_dat
     logger.info(f"Starting STAGED soul generation: job={job_id}, db_agent={agent_db_id}")
 
     async def set_stage(stage: str, status: str, data: Any = None):
-        """Atomically update a single stage key in DB — safe for parallel asyncio calls.
-        Also incrementally saves stage data to agent_data to prevent data loss.
-        """
-        try:
-            async with AsyncSessionLocal() as session:
-                # If data is provided on 'done', merge it into agent_data
-                if status == "done" and data is not None:
-                    # Note: Editor stage provides the full corrected identity
-                    data_patch = json.dumps(data if stage == "editor" else {stage: data}, ensure_ascii=False)
-                    
-                    await session.execute(
-                        text("""
-                            UPDATE agents
-                            SET 
-                                stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:status_patch AS jsonb) AS json),
-                                agent_data = CAST(COALESCE(CAST(agent_data AS jsonb), '{}'::jsonb) || CAST(:data_patch AS jsonb) AS json)
-                            WHERE id = :agent_id
-                        """),
-                        {
-                            "status_patch": json.dumps({stage: status}), 
-                            "data_patch": data_patch,
-                            "agent_id": agent_db_id
-                        }
-                    )
-                else:
-                    # Atomic JSON merge for status only (running/error)
-                    await session.execute(
-                        text("""
-                            UPDATE agents
-                            SET stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:patch AS jsonb) AS json)
-                            WHERE id = :agent_id
-                        """),
-                        {"patch": json.dumps({stage: status}), "agent_id": agent_db_id}
-                    )
-                await session.commit()
-        except Exception as e:
-            logger.warning(f"Failed to update stage {stage} → {status}: {e}")
+        await update_agent_stage(agent_db_id, stage, status, data)
 
     try:
         identity = await generate_vivida_soul(
@@ -558,38 +493,7 @@ async def run_lifecycle_generation(ctx, agent_id: str, req_data: dict, suppress_
                 identity["agent_id"] = str(agent_id) # Ensure it exists for the pipeline
 
                 async def set_stage(stage: str, status: str, data: Any = None):
-                    """Atomic JSON merge update for stage status and data."""
-                    try:
-                        async with AsyncSessionLocal() as session:
-                            if status == "done" and data is not None:
-                                # Merge both status and data
-                                data_patch = json.dumps({stage: data}, ensure_ascii=False)
-                                await session.execute(
-                                    text("""
-                                        UPDATE agents
-                                        SET 
-                                            stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:status_patch AS jsonb) AS json),
-                                            agent_data = CAST(COALESCE(CAST(agent_data AS jsonb), '{}'::jsonb) || CAST(:data_patch AS jsonb) AS json)
-                                        WHERE id = :agent_id
-                                    """),
-                                    {
-                                        "status_patch": json.dumps({stage: status}), 
-                                        "data_patch": data_patch,
-                                        "agent_id": agent_id
-                                    }
-                                )
-                            else:
-                                await session.execute(
-                                    text("""
-                                        UPDATE agents
-                                        SET stages_status = CAST(COALESCE(CAST(stages_status AS jsonb), '{}'::jsonb) || CAST(:patch AS jsonb) AS json)
-                                        WHERE id = :agent_id
-                                    """),
-                                    {"patch": json.dumps({stage: status}), "agent_id": agent_id}
-                                )
-                            await session.commit()
-                    except Exception as e:
-                        logger.warning(f"Failed to update stage {stage} for agent {agent_id}: {e}")
+                    await update_agent_stage(agent_id, stage, status, data)
 
                 # Initialize stages for the UI
                 stages_to_reset = [
@@ -654,10 +558,14 @@ async def run_lifecycle_generation(ctx, agent_id: str, req_data: dict, suppress_
                 bio = data.get("biography", {})
                 psych = data.get("psychology", {})
                 exp = data.get("experience", {})
+                behav = data.get("behavioral_main", {})
+                plan = data.get("planning", {})
                 
                 full_profile_text = f"NAME: {identity.get('agent_name', 'Unknown')}\n\n"
                 full_profile_text += f"BIOGRAPHY:\n{bio.get('origin_story', '')}\n\n"
                 full_profile_text += f"PSYCHOLOGY:\nCharacter: {psych.get('character', '')}\nTraits: {', '.join(psych.get('personality_traits', []))}\nValues: {', '.join(psych.get('core_values', []))}\n\n"
+                full_profile_text += f"BEHAVIORAL HABITS:\n{json.dumps(behav, ensure_ascii=False)}\n\n"
+                full_profile_text += f"PLANNING & ROUTINE:\n{json.dumps(plan, ensure_ascii=False)}\n\n"
                 full_profile_text += f"EXPERIENCE:\n{json.dumps(exp, ensure_ascii=False)}"
 
                 kg_data = await extract_knowledge_graph(

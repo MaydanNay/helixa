@@ -34,6 +34,8 @@ async def run_agent_refinement(agent_id: str, db: AsyncSession, ci_report: Dict[
     ТЕКУЩИЕ ДАННЫЕ АГЕНТА:
     - Психология: {json.dumps(current_data.get('psychology'), ensure_ascii=False)}
     - Биография: {json.dumps(current_data.get('biography'), ensure_ascii=False)}
+    - Поведенческие привычки: {json.dumps(current_data.get('behavioral_main'), ensure_ascii=False)}
+    - Планирование и цели: {json.dumps(current_data.get('planning'), ensure_ascii=False)}
     
     ОТЧЕТ ОБ ОШИБКАХ (CI REPORT):
     - Глюки (Glitches): {glitches}
@@ -41,8 +43,8 @@ async def run_agent_refinement(agent_id: str, db: AsyncSession, ci_report: Dict[
     - Резюме аудита: {audit_summary}
     
     ИНСТРУКЦИЯ:
-    1. Проанализируйте, какие черты личности или факты биографии приводят к "выходу из роли".
-    2. Создайте ОБНОВЛЕННУЮ версию Психологии и/или Биографии. 
+    1. Проанализируйте, какие черты личности, факты биографии или ПОВЕДЕНЧЕСКИЕ ПРИВЫЧКИ приводят к "выходу из роли".
+    2. Создайте ОБНОВЛЕННУЮ версию Психологии, Биографии, Привычек (behavioral_main) и/или Плана (planning). 
     3. Не меняйте всё полностью, исправьте только проблемные места. Добавьте глубины там, где агент кажется поверхностным.
     
     ОТВЕТ ДОЛЖЕН БЫТЬ НА РУССКОМ ЯЗЫКЕ.
@@ -50,8 +52,10 @@ async def run_agent_refinement(agent_id: str, db: AsyncSession, ci_report: Dict[
     Выходные данные ДОЛЖНЫ быть строго в формате JSON:
     {{
         "patch": {{
-            "psychology": {{ ... обновленный объект целиком или только изменения ... }},
-            "biography": {{ ... обновленный объект целиком или только изменения ... }}
+            "psychology": {{ ... }},
+            "biography": {{ ... }},
+            "behavioral_main": {{ ... }},
+            "planning": {{ ... }}
         }},
         "reasoning": "Краткое объяснение, что именно и почему было исправлено."
     }}
@@ -88,6 +92,12 @@ async def run_agent_refinement(agent_id: str, db: AsyncSession, ci_report: Dict[
             
     if "biography" in patch and isinstance(patch["biography"], dict):
         deep_merge(updated_data.setdefault("biography", {}), patch["biography"])
+
+    if "behavioral_main" in patch and isinstance(patch["behavioral_main"], dict):
+        deep_merge(updated_data.setdefault("behavioral_main", {}), patch["behavioral_main"])
+
+    if "planning" in patch and isinstance(patch["planning"], dict):
+        deep_merge(updated_data.setdefault("planning", {}), patch["planning"])
 
     # Update database
     agent.agent_data = updated_data

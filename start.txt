@@ -2,3 +2,9 @@ cd helixa
 docker compose down
 docker compose up --build -d
 docker compose logs -f
+
+
+cd helixa
+git add .
+git commit -m ""
+git push -f origin main

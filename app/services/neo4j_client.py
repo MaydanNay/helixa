@@ -127,7 +127,7 @@ class GraphMemoryService:
                     """
                     await session.run(query, source_id=source_id, target_id=target_id, props=props)
 
-            logger.info(f"Ingested {len(nodes)} nodes and {len(edges)} edges into Neo4j GRAG.")
+            logger.info(f"Ingested {len(nodes)} nodes and {len(edges)} edges into Neo4j Graph.")
         except Exception as e:
             logger.error(f"Error ingesting knowledge graph into Neo4j: {e}")
 

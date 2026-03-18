@@ -16,14 +16,18 @@ async def calculate_compatibility(agent_a_cfg, agent_b_cfg, llm_call):
         "name": agent_a_cfg.get("agent_name"),
         "profile": agent_a_cfg.get("agent_profile"),
         "demographics": agent_a_cfg.get("agent_data", {}).get("demographics"),
-        "psychology": agent_a_cfg.get("agent_data", {}).get("psychology")
+        "psychology": agent_a_cfg.get("agent_data", {}).get("psychology"),
+        "behavioral": agent_a_cfg.get("agent_data", {}).get("behavioral_main"),
+        "planning": agent_a_cfg.get("agent_data", {}).get("planning")
     }
     
     agent_b_brief = {
         "name": agent_b_cfg.get("agent_name"),
         "profile": agent_b_cfg.get("agent_profile"),
         "demographics": agent_b_cfg.get("agent_data", {}).get("demographics"),
-        "psychology": agent_b_cfg.get("agent_data", {}).get("psychology")
+        "psychology": agent_b_cfg.get("agent_data", {}).get("psychology"),
+        "behavioral": agent_b_cfg.get("agent_data", {}).get("behavioral_main"),
+        "planning": agent_b_cfg.get("agent_data", {}).get("planning")
     }
 
     user_prompt = f"Analyze compatibility between:\nAgent A: {json.dumps(agent_a_brief, ensure_ascii=False)}\n\nAgent B: {json.dumps(agent_b_brief, ensure_ascii=False)}"

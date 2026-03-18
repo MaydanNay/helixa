@@ -176,6 +176,17 @@ def _get_detailed_identity(agent) -> str:
         blind = cog.get("blind_spots", [])
         if blind: parts.append(f"Слепые пятна (НЕ ЗНАЕТ!): {', '.join(blind)}")
         
+    # Behavioral (MiroMira traits)
+    behav = data.get("behavioral_main", {})
+    if behav:
+        parts.append(f"Привычки: Активность={behav.get('activity_level')}, Соцсети={behav.get('social_media_activity')}, Задержка ответов={behav.get('response_latency')}")
+        
+    # Planning
+    plan = data.get("planning", {})
+    if plan:
+        strategy = plan.get("strategy", {}).get("long_term_goals", [])
+        if strategy: parts.append(f"Цели: {', '.join(strategy[:3])}")
+        
     return " | ".join(parts) if parts else "Детальные данные отсутствуют."
 
 async def _get_agent_response(agent, prompt: str, transcript: List[Dict[str, str]] = None) -> Dict[str, str]:

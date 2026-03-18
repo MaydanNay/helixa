@@ -58,3 +58,4 @@ exports/
 debug_redis_tmp.py
 frontend/node_modules/
 frontend/dist/
+docker-compose.yml

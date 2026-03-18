@@ -147,6 +147,11 @@ async def get_planning_routine_schema(count, profile_with_strategy):
             - Создай 2-5 ОБЯЗАТЕЛЬНЫХ событий в неделю, которые агент НЕ пропустит.
             - Примеры: "Пятница 19:00 - Спортзал", "Воскресенье 12:00 - Семейный обед".
             - priority: 10 = не может пропустить, 1 = гибко.
+        
+        **ВАЖНО ДЛЯ ФИЗИКИ (MiroFish integration):**
+        - **response_latency**: Как быстро агент реагирует на события (минуты). Студенты: 1-15 мин, Чиновники: 60-240 мин.
+        - **activity_level**: Насколько агент проактивен (0.1 - ленивый/наблюдатель, 0.9 - гиперактивный).
+        - **energy_curve**: Должна четко отражать пики активности и спады (сон).
     """
 
     schema_routine = {
@@ -216,7 +221,11 @@ async def get_planning_routine_schema(count, profile_with_strategy):
                         "type": "array",
                         "items": {"type": "number", "minimum": 0, "maximum": 1},
                         "description": "24 floats (0-1), one per hour, representing energy level."
-                    }
+                    },
+                    # MiroFish Harvest: Physical response patterns
+                    "response_latency_min": {"type": "integer", "description": "Minimum delay in minutes before reacting to a stimulus."},
+                    "response_latency_max": {"type": "integer", "description": "Maximum delay in minutes before reacting to a stimulus."},
+                    "activity_level": {"type": "number", "minimum": 0, "maximum": 1, "description": "General probability of initiating an action (0-1)."}
                 }
             },
             "routine_anchors": {
@@ -459,8 +468,8 @@ async def get_planning_day_schema(count, profile):
             "title": "Commute to Work",
             "description": "Я сажусь в машину и еду в офис, слушая утренний подкаст.",
             "expectation": "Доехать без пробок за 45 минут.",
-            "start_time": f"{now_almaty[:10]}T08:00:00+05:00",
-            "end_time": f"{now_almaty[:10]}T08:45:00+05:00",
+            "start_time": f"{now_almaty.split('T')[0]}T08:00:00+05:00",
+            "end_time": f"{now_almaty.split('T')[0]}T08:45:00+05:00",
             "activity_type": "commute",
             "location_type": "transit",
             "is_socializing": False,
@@ -479,8 +488,8 @@ async def get_planning_day_schema(count, profile):
             "title": "Lunch with Colleagues",
             "description": "Мы идём в соседнее кафе пообедать и обсудить планы на выходные.",
             "expectation": "Вкусно поесть и немного отвлечься от рабочих задач.",
-            "start_time": f"{now_almaty[:10]}T13:00:00+05:00",
-            "end_time": f"{now_almaty[:10]}T14:00:00+05:00",
+            "start_time": f"{now_almaty.split('T')[0]}T13:00:00+05:00",
+            "end_time": f"{now_almaty.split('T')[0]}T14:00:00+05:00",
             "activity_type": "eating",
             "location_type": "leisure",
             "is_socializing": True,

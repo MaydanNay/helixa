@@ -32,6 +32,16 @@ async def get_behavioral_main_schema(count, profile_context):
             "tech_savviness": {"type": "string"},
             "responsiveness": {"type": "string"},
             "peak_contact_hours": {"type": "array", "items": {"type": ["integer", "string"]}},
+            # MiroFish Harvest: Social Media Physicality
+            "social_media_activity": {
+                "type": "object",
+                "properties": {
+                    "posts_per_hour": {"type": "number", "description": "Average frequency of original posts."},
+                    "comments_per_hour": {"type": "number", "description": "Average frequency of comments/replies."},
+                    "influence_weight": {"type": "number", "description": "How much this agent's actions sway others (0.1-5.0)."},
+                    "stance_bias": {"type": "string", "enum": ["supportive", "opposing", "neutral", "observer"]}
+                }
+            },
             # Дополнительные поля, которые LLM может вернуть
             "pattern_name": {"type": "string"},
             "description": {"type": "string"},

@@ -48,8 +48,8 @@ services:
     restart: unless-stopped
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-helixa_graph_secret}
-      NEO4J_dbms_memory_heap_max__size: 400M
-      NEO4J_dbms_memory_pagecache_size: 200M
+      NEO4J_server_memory_heap_max__size: 400M
+      NEO4J_server_memory_pagecache_size: 200M
     ports:
       - "127.0.0.1:7474:7474" # HTTP UI
       - "127.0.0.1:7687:7687" # Bolt port
@@ -58,7 +58,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 700M
+          memory: 600M
     networks:
       - default
 
@@ -153,7 +153,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 200M
+          memory: 512M
     depends_on:
       - api
 

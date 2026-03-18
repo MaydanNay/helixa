@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     qwen_api_key: str = ""
     gpt_oss_api_key: str = ""
     openai_api_key: str = ""
+    tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
     secret_key: str = "super_secret_jwt_key_helixa"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440

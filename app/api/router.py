@@ -16,6 +16,8 @@ from app.services.auth_service import decode_access_token, check_generation_quot
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, desc
 import logging
+from app.services.audit_service import run_psychological_audit, _get_detailed_identity
+
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,10 @@ class LifecycleRequest(BaseModel):
     provider: str = "gpt-oss"
     webhook_url: Optional[HttpUrl] = None
     client_reference_id: Optional[str] = None
+
+class HarvestRequest(BaseModel):
+    topic: Optional[str] = None
+    chat_history: Optional[str] = None
 
 class TuringChatRequest(BaseModel):
     agent_id: str
@@ -647,10 +653,13 @@ async def agent_action(agent_id: str, req: AgentActionRequest, db: AsyncSession 
     episodic_context = "\n".join([str(res.get("text")) for res in vector_results]) if vector_results else "No relevant past episodes found."
     
     # 3. Construct Hybrid Prompt
+    identity_summary = _get_detailed_identity(agent.agent_data)
+    
     system_prompt = f"""
     You are {agent.name}, an AI agent with the role of {agent.role}.
-    Here is some background context about you:
-    {agent.agent_data.get('background', 'Unknown background.')}
+    
+    [CORE IDENTITY & DNA]:
+    {identity_summary}
     
     [SEMANTIC FACTS (Graph Memory)]:
     Below are the absolute facts and relationships you know about your world:
@@ -725,6 +734,31 @@ async def evolve_agent(agent_id: str, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Evolution failed for {agent_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/agents/{agent_id}/harvest")
+async def harvest_knowledge(agent_id: str, req: HarvestRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Triggers an autonomous knowledge gathering process for the agent.
+    - If topic is provided: performs web search & KG extraction.
+    - If chat_history is provided: performs social KG extraction from interaction.
+    """
+    from app.services.harvesting_service import perform_web_harvest, perform_social_harvest
+    
+    result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+        
+    agent_name = agent.agent_data.get("identity", {}).get("name", agent.name)
+    
+    if req.topic:
+        return await perform_web_harvest(agent_id, agent_name, req.topic)
+    
+    if req.chat_history:
+        return await perform_social_harvest(agent_id, agent_name, req.chat_history)
+        
+    return {"ok": False, "error": "Either topic or chat_history must be provided"}
+
 @router.post("/agents/{agent_id}/labs/turing/init")
 async def init_turing(agent_id: str, db: AsyncSession = Depends(get_db)):
     from app.services.turing_lab_service import start_turing_session

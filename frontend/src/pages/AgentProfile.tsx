@@ -146,6 +146,8 @@ export default function AgentProfile() {
     const exp = data?.experience?.length ? data.experience[0] : (data?.experience || legacy?.experience?.[0] || {});
     const soc = data?.sociology || {};
     const fin = data?.financial || {};
+    const behavioral = data?.behavioral_main || {};
+    const planning = data?.planning || {};
     const metrics = agent.ci_report?.metrics || {};
 
     const resolvedName = rootDemo?.agent_name || rootDemo?.name || legacy?.name || (agent.name !== "Unknown" ? agent.name : 'Безымянный синтез');
@@ -513,6 +515,37 @@ export default function AgentProfile() {
                                     <li key={i} className="text-xs text-slate-400 flex items-start gap-2">
                                         <div className="w-1 h-1 rounded-full bg-amber-500 mt-1.5 shrink-0" />
                                         {sg}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </StatPanel>
+
+                    <StatPanel title="Поведенческая Матрица" icon={Zap} color="rose">
+                        <InfoRow label="Когнитивные искажения" value={behavioral.cognitive_biases?.[0]} />
+                        <InfoRow label="Эмоциональные привычки" value={behavioral.emotional_habits?.[0]} />
+                        <div className="py-1">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Реакции на стресс</span>
+                            <ul className="space-y-1.5">
+                                {behavioral.stress_reactions?.slice(0, 3).map((sr: string, i: number) => (
+                                    <li key={i} className="text-xs text-slate-400 flex items-start gap-2">
+                                        <div className="w-1 h-1 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                                        {sr}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </StatPanel>
+
+                    <StatPanel title="Рутины & Планирование" icon={CalendarClock} color="blue">
+                        <InfoRow label="Стратегический приоритет" value={planning.strategic_priorities?.[0]} />
+                        <div className="py-1">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1.5">Ежедневный распорядок</span>
+                            <ul className="space-y-1.5">
+                                {planning.routines?.slice(0, 3).map((r: string, i: number) => (
+                                    <li key={i} className="text-xs text-slate-400 flex items-start gap-2">
+                                        <div className="w-1 h-1 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                                        {r}
                                     </li>
                                 ))}
                             </ul>
